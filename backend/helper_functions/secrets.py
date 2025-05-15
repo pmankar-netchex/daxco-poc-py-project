@@ -4,7 +4,7 @@ def get_api_config(environment="tequila"):
     configs = {
         "tequila": {
             "base_endpoint": "https://tequila-employee-api-primary.azurewebsites.net",
-            "api_key": "ajZoalNWbVghZ3RtNFAlbUhEcVB5M0I2XlEyWG1YJF4"
+            "api_key": os.getenv("TEQUILA_API_KEY")  # Set this in your .env file
         },
         # Add more environments here as needed
         # "staging": { ... },

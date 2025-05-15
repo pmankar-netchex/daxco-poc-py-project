@@ -28,6 +28,9 @@ from helper_functions import (
 )
 from helper_functions.constants import Output
 import logging
+from dotenv import load_dotenv
+
+load_dotenv()
 
 FUNCTION_REGISTRY = {
     'fetch_employees': fetch_employees,
