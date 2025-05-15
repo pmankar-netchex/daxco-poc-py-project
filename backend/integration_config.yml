@@ -1,0 +1,15 @@
+payroll:
+  Daxco:
+    - name: fetch_employees
+      function: fetch_employees
+      input_stage: [company_id]
+      output_stage: employees
+    - name: daxco_file_transformation
+      function: daxco_transformation
+      input_stage: [file_bytes, employees]
+      output_stage: transformed
+    - name: validate_transformation
+      function: validate_transformation
+      input_stage: [transformed, employees]
+      output_stage: validated
+# Add more integrations/providers as needed 
