@@ -36,54 +36,93 @@ const ValidationPage = () => {
   const [originalRows, setOriginalRows] = useState([]); // Store original format for compatibility
   const [expandedRows, setExpandedRows] = useState({});
 
-  // Helper function to update the data object with new department code
-  const updateDeptCode = React.useCallback((rowIndex, deptCode) => {
-    setData(prevData => {
-      const newRows = [...prevData.rows];
-      
-      // Handle new format
-      if (newRows[rowIndex]["Distributed Dept Code"]) {
-        newRows[rowIndex]["Distributed Dept Code"] = {
-          ...newRows[rowIndex]["Distributed Dept Code"],
-          valid: true,
-          exact_match: {
-            dept_code: deptCode
-          }
-        };
-        
-        // Also update the original rows for API compatibility
-        setOriginalRows(prevOriginalRows => {
-          const newOriginalRows = [...prevOriginalRows];
-          newOriginalRows[rowIndex] = {
-            ...newOriginalRows[rowIndex],
-            distributed_dept_code: deptCode
-          };
-          return newOriginalRows;
-        });
-      } else {
-        // Legacy format
-        newRows[rowIndex].distributed_dept_code = deptCode;
-        
-        // Also update original rows
-        setOriginalRows(prevOriginalRows => {
-          const newOriginalRows = [...prevOriginalRows];
-          newOriginalRows[rowIndex] = {
-            ...newOriginalRows[rowIndex],
-            distributed_dept_code: deptCode
-          };
-          return newOriginalRows;
-        });
-      }
-      
-      return { ...prevData, rows: newRows };
-    });
-  }, []);
-
   useEffect(() => {
     if (data?.all_valid) {
       setSuccessOpen(true);
     }
   }, [data?.all_valid]);
+
+  // When data loads, transform it to maintain compatibility with the download API
+  useEffect(() => {
+    if (data?.rows) {
+      // If data is already in legacy format (has employee_id instead of Employee), keep it as is
+      if (data.rows.length > 0 && 'employee_id' in data.rows[0]) {
+        setOriginalRows(data.rows);
+      } else {
+        // Transform new format to legacy format for API compatibility
+        const transformedRows = data.rows.map(row => {
+          const employee = row.Employee || {};
+          const grossToNetCode = row["Gross to Net Code"] || {};
+          const typeCode = row["Type Code"] || {};
+          const deptCode = row["Distributed Dept Code"] || {};
+          
+          // Mark employee as invalid if it doesn't have an exact match or exact_match is empty
+          const isEmployeeValid = employee.valid && employee.exact_match && 
+            (employee.exact_match.employee_id || employee.exact_match.first_name || employee.exact_match.last_name);
+          
+          return {
+            employee_id: employee.exact_match?.employee_id || "",
+            gross_to_net_code: grossToNetCode.exact_match?.net_code || "1",
+            type_code: typeCode.exact_match?.net_code || "REG",
+            hours_or_amount: row["Hours or Amount"] || 0,
+            temporary_rate: row["Temporary Rate"] || "",
+            distributed_dept_code: deptCode.exact_match?.dept_code || "",
+            employee_id_valid: isEmployeeValid,
+            possible_employee_ids: employee.possible_matches?.map(m => m.employee_id) || [],
+            first_name: employee.exact_match?.first_name || "",
+            last_name: employee.exact_match?.last_name || "",
+          };
+        });
+        setOriginalRows(transformedRows);
+      }
+    }
+  }, [data]);
+
+  // Add effect to auto-select single employee matches
+  useEffect(() => {
+    if (data?.rows) {
+      // Use data.rows instead of rows to avoid dependency issues
+      const newRows = [...data.rows];
+      let hasChanges = false;
+
+      newRows.forEach((row, rowIdx) => {
+        const employeeField = row.Employee || {
+          possible_matches: row.possible_employee_ids?.map(id => ({ employee_id: id })) || []
+        };
+
+        // If there's exactly one possible match and no employee is selected yet
+        if (employeeField.possible_matches?.length === 1 && 
+            (!employeeField.exact_match?.employee_id || 
+             !employeeField.exact_match?.first_name || 
+             !employeeField.exact_match?.last_name)) {
+          // Use updateEmployeeId to select the employee
+          updateEmployeeId(rowIdx, employeeField.possible_matches[0].employee_id);
+          hasChanges = true;
+        }
+      });
+
+      // No need to update state again, as updateEmployeeId already updates it
+      // The hasChanges variable is kept for potential future use
+    }
+  }, [data?.rows, updateEmployeeId]); // Include updateEmployeeId in the dependency array
+
+  if (!data) {
+    return (
+      <Box mt={8} textAlign="center">
+        <Typography color="error">No validation data found. Please upload a file first.</Typography>
+      </Box>
+    );
+  }
+
+  const { rows = [], all_valid = false } = data;
+
+  // Toggle expansion state for a specific row
+  const toggleRowExpansion = (rowIdx) => {
+    setExpandedRows(prev => ({
+      ...prev,
+      [rowIdx]: !prev[rowIdx]
+    }));
+  };
 
   // Helper function to check if a field has possible matches
   const hasPossibleMatches = (field) => {
@@ -171,89 +210,6 @@ const ValidationPage = () => {
       return { ...prevData, rows: newRows };
     });
   }, []);
-
-  // When data loads, transform it to maintain compatibility with the download API
-  useEffect(() => {
-    if (data?.rows) {
-      // If data is already in legacy format (has employee_id instead of Employee), keep it as is
-      if (data.rows.length > 0 && 'employee_id' in data.rows[0]) {
-        setOriginalRows(data.rows);
-      } else {
-        // Transform new format to legacy format for API compatibility
-        const transformedRows = data.rows.map(row => {
-          const employee = row.Employee || {};
-          const grossToNetCode = row["Gross to Net Code"] || {};
-          const typeCode = row["Type Code"] || {};
-          const deptCode = row["Distributed Dept Code"] || {};
-          
-          // Mark employee as invalid if it doesn't have an exact match or exact_match is empty
-          const isEmployeeValid = employee.valid && employee.exact_match && 
-            (employee.exact_match.employee_id || employee.exact_match.first_name || employee.exact_match.last_name);
-          
-          return {
-            employee_id: employee.exact_match?.employee_id || "",
-            gross_to_net_code: grossToNetCode.exact_match?.net_code || "1",
-            type_code: typeCode.exact_match?.net_code || "REG",
-            hours_or_amount: row["Hours or Amount"] || 0,
-            temporary_rate: row["Temporary Rate"] || "",
-            distributed_dept_code: deptCode.exact_match?.dept_code || "",
-            employee_id_valid: isEmployeeValid,
-            possible_employee_ids: employee.possible_matches?.map(m => m.employee_id) || [],
-            first_name: employee.exact_match?.first_name || "",
-            last_name: employee.exact_match?.last_name || "",
-          };
-        });
-        setOriginalRows(transformedRows);
-      }
-    }
-  }, [data]);
-
-  // Add effect to auto-select employee matches and department codes
-  useEffect(() => {
-    if (data?.rows) {
-      // Use data.rows instead of rows to avoid dependency issues
-      const newRows = [...data.rows];
-
-      newRows.forEach((row, rowIdx) => {
-        const employeeField = row.Employee || {
-          possible_matches: row.possible_employee_ids?.map(id => ({ employee_id: id })) || []
-        };
-
-        // If there's exactly one possible match and no employee is selected yet
-        if (employeeField.possible_matches?.length === 1 && 
-            (!employeeField.exact_match?.employee_id || 
-             !employeeField.exact_match?.first_name || 
-             !employeeField.exact_match?.last_name)) {
-          // Use updateEmployeeId to select the employee
-          updateEmployeeId(rowIdx, employeeField.possible_matches[0].employee_id);
-        }
-        
-        // Auto-select the first department code if none is selected
-        const deptCodeField = row["Distributed Dept Code"] || {};
-        if (!deptCodeField.exact_match?.dept_code && !row.distributed_dept_code) {
-          updateDeptCode(rowIdx, DEPARTMENT_CODES[0]);
-        }
-      });
-    }
-  }, [data?.rows, updateEmployeeId, updateDeptCode]); // Include updateEmployeeId and updateDeptCode in the dependency array
-
-  if (!data) {
-    return (
-      <Box mt={8} textAlign="center">
-        <Typography color="error">No validation data found. Please upload a file first.</Typography>
-      </Box>
-    );
-  }
-
-  const { rows = [], all_valid = false } = data;
-
-  // Toggle expansion state for a specific row
-  const toggleRowExpansion = (rowIdx) => {
-    setExpandedRows(prev => ({
-      ...prev,
-      [rowIdx]: !prev[rowIdx]
-    }));
-  };
 
   // Helper function to update the data object with new gross to net code
   const updateGrossToNetCode = (rowIndex, netCode) => {
@@ -360,6 +316,34 @@ const ValidationPage = () => {
   };
 
   // Helper function to update the data object with new department code
+  const updateDeptCode = (rowIndex, deptCode) => {
+    const newRows = [...rows];
+    
+    // Handle new format
+    if (newRows[rowIndex]["Distributed Dept Code"]) {
+      newRows[rowIndex]["Distributed Dept Code"] = {
+        ...newRows[rowIndex]["Distributed Dept Code"],
+        valid: true,
+        exact_match: {
+          dept_code: deptCode
+        }
+      };
+      
+      // Also update the original rows for API compatibility
+      const newOriginalRows = [...originalRows];
+      newOriginalRows[rowIndex] = {
+        ...newOriginalRows[rowIndex],
+        distributed_dept_code: deptCode
+      };
+      setOriginalRows(newOriginalRows);
+    } else {
+      // Legacy format
+      newRows[rowIndex].distributed_dept_code = deptCode;
+    }
+    
+    setData({ ...data, rows: newRows });
+  };
+
   const handleRevalidate = async () => {
     setSaving(true);
     setError("");
@@ -690,10 +674,12 @@ const ValidationPage = () => {
                         <Select
                           value={deptCodeField.exact_match?.dept_code || DEPARTMENT_CODES[0]}
                           size="small"
+                          displayEmpty
                           onChange={(e) => updateDeptCode(rowIdx, e.target.value)}
                           sx={{ width: '100%' }}
                           onClick={(e) => e.stopPropagation()}
                         >
+                          <MenuItem value=""><em>None</em></MenuItem>
                           {DEPARTMENT_CODES.map(code => (
                             <MenuItem key={code} value={code}>{code}</MenuItem>
                           ))}

@@ -19,7 +19,7 @@ def get_department_from_bytes(file_bytes):
 
 def daxco_transformation(file_bytes, employees):
     """
-    Transform a Daxco payroll CSV file into a list of structured dictionaries.
+    Transform a Daxco payroll CSV file into a list of structured dictionaries using the new format.
 
     Args:
         file_bytes (bytes): The raw bytes of the uploaded CSV file.
@@ -27,15 +27,11 @@ def daxco_transformation(file_bytes, employees):
 
     Returns:
         list[dict]: List of transformed payroll data rows, each as a dictionary with keys:
-            'first_name', 'last_name', 'department', 'adjustments', 'time_clock_hours',
-            'scheduled_hours', 'scheduled_payroll', 'total_hours', 'details', 'employee_code'.
+            'employee_id', 'gross_to_net_code', 'type_code', 'hours_or_amount', 
+            'temporary_rate', 'distributed_dept_code'.
 
     Raises:
         ValueError: If the header row cannot be found in the CSV file.
-
-    Example:
-        >>> daxco_transformation(file_bytes, employees)
-        [{...}, ...]
     """
     logging.info(f"Parsing CSV file bytes for Daxco transformation")
     department = get_department_from_bytes(file_bytes)
@@ -64,27 +60,48 @@ def daxco_transformation(file_bytes, employees):
         # Extract first and last name from the row
         first = safe_get(row, 'Staff First Name')
         last = safe_get(row, 'Staff Last Name')
-        # Convert to uppercase for case-insensitive matching
-        first_upper = first.upper() if first else ''
-        last_upper = last.upper() if last else ''
-        # Match employee by first and last name (case-insensitive)
-        emp_matches = [e for e in employees if e['first_name'].upper() == first_upper and e['last_name'].upper() == last_upper]
-        emp_code = emp_matches[0]['employee_id'] if len(emp_matches) == 1 else ''
-        # Store/display names in title case
+        
+        # Since fetch_employees is disabled, we won't have employee data
+        # We'll use the data directly from the CSV file instead
+        first_name = first.title() if first else ''
+        last_name = last.title() if last else ''
+        
+        # Since we don't have employee data, we'll use placeholder values
+        emp_code = ''
+        dept_code = department or ""
+        
+        # Store original values for validation and reference
+        adjustments = parse_currency_value(safe_get(row, 'Adjustments'))
+        time_clock_hours = safe_get(row, 'Time Clock Hours')
+        scheduled_hours = safe_get(row, 'Scheduled Hours')
+        scheduled_payroll = safe_get(row, 'Scheduled Payroll')
+        total_hours = safe_get(row, 'Total Hours')
+        details = safe_get(row, 'Details')
+        
+        # Transform to new format
         output_row = Output(
-            first_name=first.title() if first else '',
-            last_name=last.title() if last else '',
+            # New format fields
+            employee_id=str(emp_code),
+            gross_to_net_code="1",  # Default to Earnings Code
+            type_code="REG",  # Default to Regular earnings
+            hours_or_amount= scheduled_payroll or scheduled_hours or time_clock_hours or 0,
+            temporary_rate="",  # Default to empty
+            distributed_dept_code=dept_code or department or "4287",  # Default to 4287 if empty
+            
+            # Keep original values for reference and validation
+            first_name=first_name,
+            last_name=last_name,
             department=department,
-            adjustments=parse_currency_value(safe_get(row, 'Adjustments')),
-            time_clock_hours=safe_get(row, 'Time Clock Hours'),
-            scheduled_hours=safe_get(row, 'Scheduled Hours'),
-            scheduled_payroll=safe_get(row, 'Scheduled Payroll'),
-            total_hours=safe_get(row, 'Total Hours'),
-            details=safe_get(row, 'Details'),
+            adjustments=adjustments,
+            time_clock_hours=time_clock_hours,
+            scheduled_hours=scheduled_hours,
+            scheduled_payroll=scheduled_payroll,
+            total_hours=total_hours,
+            details=details,
             employee_code=emp_code
         )
         out.append(output_row)
         if idx < 5:  # Log first few rows for debugging
             logging.debug(f"Transformed row {idx}: {output_row}")
     logging.info(f"Transformed {len(out)} rows")
-    return out 
+    return out

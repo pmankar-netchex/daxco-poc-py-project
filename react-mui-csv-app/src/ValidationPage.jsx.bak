@@ -360,6 +360,48 @@ const ValidationPage = () => {
   };
 
   // Helper function to update the data object with new department code
+  const updateDeptCode = React.useCallback((rowIndex, deptCode) => {
+    setData(prevData => {
+      const newRows = [...prevData.rows];
+      
+      // Handle new format
+      if (newRows[rowIndex]["Distributed Dept Code"]) {
+        newRows[rowIndex]["Distributed Dept Code"] = {
+          ...newRows[rowIndex]["Distributed Dept Code"],
+          valid: true,
+          exact_match: {
+            dept_code: deptCode
+          }
+        };
+        
+        // Also update the original rows for API compatibility
+        setOriginalRows(prevOriginalRows => {
+          const newOriginalRows = [...prevOriginalRows];
+          newOriginalRows[rowIndex] = {
+            ...newOriginalRows[rowIndex],
+            distributed_dept_code: deptCode
+          };
+          return newOriginalRows;
+        });
+      } else {
+        // Legacy format
+        newRows[rowIndex].distributed_dept_code = deptCode;
+        
+        // Also update original rows
+        setOriginalRows(prevOriginalRows => {
+          const newOriginalRows = [...prevOriginalRows];
+          newOriginalRows[rowIndex] = {
+            ...newOriginalRows[rowIndex],
+            distributed_dept_code: deptCode
+          };
+          return newOriginalRows;
+        });
+      }
+      
+      return { ...prevData, rows: newRows };
+    });
+  }, []);
+
   const handleRevalidate = async () => {
     setSaving(true);
     setError("");

@@ -1,0 +1,5 @@
+employee_id,gross_to_net_code,type_code,hours_or_amount,temporary_rate,distributed_dept_code
+12345,1,REG,40,,001
+12346,1,BON,500,,000
+12347,3,MED,75.5,,PRL
+12348,1,FB,80,25.75,001

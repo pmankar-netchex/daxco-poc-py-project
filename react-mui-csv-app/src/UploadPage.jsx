@@ -9,7 +9,7 @@ const UploadPage = () => {
   const [csvData, setCsvData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [companyId, setCompanyId] = useState("123");
+  const [companyId, setCompanyId] = useState("4287");
   const [integrationType, setIntegrationType] = useState("payroll");
   const [integrationProvider, setIntegrationProvider] = useState("Daxco");
   const [webhookResult, setWebhookResult] = useState(null);
@@ -77,12 +77,12 @@ const UploadPage = () => {
       navigate("/validate", { state: { webhookResult: response.data } });
     } catch (err) {
       setLoading(false);
-      setError("Upload failed. Please try again.");
+      setError(`Upload failed: ${err.message || "Please try again."}`);
     }
   };
 
   return (
-    <Box display="flex" flexDirection="column" alignItems="center" mt={8}>
+    <Box display="flex" flexDirection="column" alignItems="center">
       <Paper sx={{ p: 4, width: 400 }} elevation={3}>
         <Typography variant="h5" mb={2}>Upload CSV</Typography>
         <Box mb={2}>

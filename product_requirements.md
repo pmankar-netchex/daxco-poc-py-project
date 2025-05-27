@@ -1,24 +1,53 @@
 ## Payroll integration app
 
-Frontend requirements  -
-   i. User can upload or drag and drop CSV in the input format, as mentioned in the input_format.csv
-   ii. user also selects fields like company from a drop_down list as per selected company Company_code is passed down in JSON object. Along with additional information integration_type=DAXCO and upload_type=PAYROLL
-   iii. Once import is complete, user clicks on validate button to trigger validation workflow
-   iv. This click triggers a backend API call where company_code is sent in object and csv filed as passed on as uploaded. Backend API will do validations, and return results to frontend.
-   v. Post validation click user is redirected to validation page, where user will see validation data in tabular format
-   vi. User can make manual edits in any row, all the invalid rows are highlighted for user to act, user can delete entire invalid row as well
-   vii. post manual corrections, if there are not validation errors, user can click on re-validate and submit button
-   viii. After clicking on re-validate and submit, if there are no issues, user will be redirected to validation success page, here user can see download button to download final transformed file
-   ix. After clicking on re-validate and submit, if there are still validation issues, user stays on same page where new validation errors are displayed for user to correct from
+- Endpoint 1- Incoming web hook (Rest API) Requirements
+    - Query parameters
+        - companyId - integer
+        - Integration_type - string
+        - integration_provider - string
+    - Accept CSV file as input
+    - Select correct configuration/orchestration file as per selected provider (Mock value for integration_type=payroll, integration_provider = Daxco)
+    - Different stages supported for orchestration
+        - csv_parser
+            - Input: csv_file
+            - Output: json_object
+            - Validation: accept only csv/xlsx, don’t accept file more than 2MB
+        - fetch_employees
+            - Input: companyId
+            - output: employee object
+            - Make GET call - curl -X 'GET' \ 'https://tequila-employee-api-primary.azurewebsites.net/api/v3/Employees?companyId=4394' \-H 'accept: application/json' \ -H 'Netchex-Shared-Key: ajZoalNWbVghZ3RtNFAlbUhEcVB5M0I2XlEyWG1YJF4'
+            - Keep only firstName,LastName,EmployeeId in employee_object
+            - Use companyId from the input query parameter
+        - daxco_file_transformation
+            - Input: json_object (from csv_parser stage)
+            - Output: json_object
+            - Use @input_format.csv, and convert it into @output_format.csv in this code
+            - Use employee object from “fetch_employees” stage
+            - User first_name and last_name in the input json object, search for employee in the employee_object return employee_code value, and add that into transformed output object
+        - validate_transformation
+            - Input json_object (from daxco_file_transformation stage)
+            - Output json_object with validation object per cell
+            - Compute for each cell where value is valid or not
+            - If value is invalid give an array of possible values for user to select from
+            - For e.g. if employee is not found say row is not valid with empty array, multiple employees are found show list of all possible employee_codes for user to select from
+            - If employee_code is not already empty, then check if code already belongs to employee_object if yes then valid row else not valid row
+            - Give overall validate option at the main object level (true only if all the cells are valid)
+- Endpoint 2- Validate and download endpoint
+        - fetch_employees (same as endpoint 1)
+            - Input: companyId
+            - output: employee object
+            - Make GET call - curl -X 'GET' \ 'https://tequila-employee-api-primary.azurewebsites.net/api/v3/Employees?companyId=4394' \-H 'accept: application/json' \ -H 'Netchex-Shared-Key: ajZoalNWbVghZ3RtNFAlbUhEcVB5M0I2XlEyWG1YJF4'
+            - Keep only firstName,LastName,EmployeeId in employee_object
+            - Use companyId from the input query parameter
+            - This maybe required as requests are not linked
+        - validate_transformation (use same function for both the endpoints to avoid rework)
+            - Expect input as output from validate_transformation stage in endpoint 1
+            - Do same/similar validation again
+            - Output would be similar json__object with validation information
+            - Purpose of this endpoint is to revalidate without needing to do transformations again
+    - Endpoint 3 - Download CSV
+        - download_csv
+            - Expect input json_object which will be output from validate_transformation
+            - Ignore validation objects, convert this object into csv and download csv
 
-Backend requirements - 
-   i. Frontend will trigger a trigger to a backend API which will host backend logic
-   ii. Frontend will send file as csv and json object
-   iii. Backend will expect file in input_format.csv and convert it into formatted_output.csv
-   iv. if there multiple employee codes found, user should be seeing drop-down to select from
-   v. if there are no employee code found, user will enter code manually
-   vi. if any column is missing, or any validation fails show error that file-format not suported
-   vii. scheduled_payroll field should be numeric as it's payroll value in dollars
-
-Frontend should use react app with mui and simple css
-Backend needs to be logic app, as I want to reuse most of these things for more input formats
+Create a Dockerfile and readme file containerize this application
